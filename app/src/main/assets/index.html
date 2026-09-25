@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>手机文件管理器</title>
+<style>
+  :root { --bg:#f5f6fa; --card:#fff; --primary:#6750A4; --text:#1f2330; --muted:#8a8f9c; --border:#ececf2; --red:#d6455b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
+  header { background:var(--primary); color:#fff; padding:14px 20px; display:flex; align-items:center; justify-content:space-between; }
+  header h1 { font-size:17px; margin:0; font-weight:600; }
+  .container { max-width:960px; margin:0 auto; padding:16px; }
+  .pathbar { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin-bottom:14px; font-size:14px; word-break:break-all; color:var(--muted); }
+  .pathbar b { color:var(--text); }
+  .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:8px; }
+  button { background:var(--primary); color:#fff; border:none; border-radius:8px; padding:9px 14px; font-size:14px; cursor:pointer; }
+  button.ghost { background:#fff; color:var(--primary); border:1px solid var(--primary); }
+  button.danger { background:var(--red); }
+  button.small { padding:5px 10px; font-size:13px; border-radius:6px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  table { width:100%; border-collapse:collapse; table-layout:fixed; }
+  th, td { text-align:left; padding:12px 14px; border-bottom:1px solid var(--border); font-size:14px; overflow:hidden; }
+  th { color:var(--muted); font-weight:600; font-size:13px; background:#fafafe; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:#faf9ff; }
+  .col-size { width:110px; } .col-mod { width:170px; } .col-act { width:300px; }
+  .name { display:flex; align-items:center; gap:8px; min-width:0; }
+  .name > :last-child { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ic { width:22px; min-width:22px; text-align:center; }
+  .dir { color:var(--primary); font-weight:600; cursor:pointer; }
+  .size, .mod { color:var(--muted); }
+  .actions { display:flex; gap:6px; justify-content:flex-end; align-items:center; white-space:nowrap; }
+  .actions a.dl { white-space:nowrap; padding:5px 6px; font-size:13px; }
+  .actions .i { display:none; }
+  /* 手机/小平板适配：改为堆叠布局——文件名独占一行（超长省略号），大小+操作按钮第二行，永不裁切 */
+  @media (max-width:760px){
+    .container { padding:10px; }
+    thead { display:none; }
+    table, tbody { display:block; width:100%; }
+    tr { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:12px 12px; border-bottom:1px solid var(--border); }
+    tr:last-child { border-bottom:none; }
+    td { padding:0; border:none; overflow:visible; font-size:13px; }
+    td[colspan] { flex:1 1 100%; width:100%; }
+    .col-name { flex:1 1 100%; min-width:0; }
+    .col-size { flex:0 0 auto; color:var(--muted); font-size:12px; }
+    .col-mod { display:none; }
+    .col-act { flex:0 0 auto; margin-left:auto; width:auto !important; }
+    .actions { gap:8px; justify-content:flex-end; }
+    .actions .t { display:none; }
+    .actions .i { display:inline; }
+    button.small { padding:8px 12px; font-size:16px; border-radius:8px; }
+    .actions a.dl { padding:8px 11px; font-size:16px; }
+    .toolbar button { padding:8px 10px; font-size:13px; }
+    .modal-nav { width:38px; height:56px; font-size:24px; }
+    .name { gap:6px; }
+    .empty { padding:30px; }
+  }
+  a.dl { color:var(--primary); text-decoration:none; }
+  .empty { padding:40px; text-align:center; color:var(--muted); }
+  #progress { margin:10px 2px; font-size:13px; color:var(--primary); min-height:18px; }
+  .hidden { display:none; }
+  /* 预览弹窗 */
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.82); z-index:100; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .modal.hidden { display:none; }
+  .modal-title { color:#fff; font-size:14px; margin:0 60px 10px; max-width:90vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .modal-body { display:flex; align-items:center; justify-content:center; max-width:96vw; max-height:82vh; }
+  .modal-body img { max-width:96vw; max-height:82vh; object-fit:contain; border-radius:6px; }
+  .modal-body video { max-width:96vw; max-height:82vh; border-radius:6px; background:#000; }
+  .modal-body audio { width:min(90vw,480px); }
+  .modal-body pre.txt, .modal-body pre.code, .modal-body .md { background:#fff; color:#1f2330; margin:0; padding:16px; border-radius:8px; width:min(92vw,900px); max-height:80vh; overflow:auto; text-align:left; }
+  .modal-body pre.txt { white-space:pre-wrap; word-break:break-word; font-family:ui-monospace,SFMono-Regular,Consolas,Menlo,monospace; font-size:13px; line-height:1.5; }
+  .modal-body pre.code { white-space:pre; word-break:normal; font-family:ui-monospace,SFMono-Regular,Consolas,Menlo,monospace; font-size:13px; line-height:1.5; }
+  /* 代码行号：行号栏固定在左侧，横向滚动不跟随；字号/行高与代码完全一致保证对齐 */
+  .codewrap { display:flex; align-items:flex-start; width:min(92vw,900px); max-height:80vh; overflow:auto; background:#fff; border-radius:8px; }
+  .modal-body .codewrap .lnum { position:sticky; left:0; z-index:1; margin:0; padding:16px 10px 16px 14px; text-align:right; color:#b0b4c0; background:#fafafb; border-right:1px solid var(--border); white-space:pre; user-select:none; -webkit-user-select:none; font-family:ui-monospace,SFMono-Regular,Consolas,Menlo,monospace; font-size:13px; line-height:1.5; }
+  .modal-body .codewrap .code { flex:1; width:auto; max-height:none; overflow:visible; margin:0; border-radius:0; background:transparent; }
+  /* 语法高亮配色 */
+  .tk-k{color:#a626a4;font-weight:600} .tk-s{color:#50a14f} .tk-c{color:#a0a1a7;font-style:italic} .tk-n{color:#986801} .tk-a{color:#c18401} .tk-t{color:#e45649}
+  /* Markdown 渲染 */
+  .md { font-size:14px; line-height:1.7; }
+  .md h1,.md h2,.md h3,.md h4,.md h5,.md h6 { margin:1em 0 .5em; line-height:1.3; font-weight:600; }
+  .md h1,.md h2 { border-bottom:1px solid var(--border); padding-bottom:.25em; }
+  .md p { margin:.6em 0; }
+  .md a { color:var(--primary); word-break:break-all; }
+  .md code { background:#f2f2f6; padding:2px 5px; border-radius:4px; font-family:ui-monospace,Consolas,Menlo,monospace; font-size:90%; }
+  .md pre.code { width:auto; max-height:none; white-space:pre; background:#f7f7fa; border:1px solid var(--border); margin:.6em 0; padding:12px; }
+  .md blockquote { border-left:4px solid var(--border); margin:.6em 0; padding:.2em 1em; color:var(--muted); }
+  .md table { border-collapse:collapse; margin:.6em 0; display:block; overflow:auto; }
+  .md th,.md td { border:1px solid var(--border); padding:6px 10px; }
+  .md th { background:#fafafe; }
+  .md ul,.md ol { padding-left:1.5em; margin:.6em 0; }
+  .md img { max-width:100%; }
+  .md hr { border:none; border-top:1px solid var(--border); margin:1em 0; }
+  .modal-footer { display:flex; gap:10px; justify-content:center; align-items:center; margin-top:12px; flex-wrap:wrap; }
+  .modal-footer .muted { color:#b9bddc; font-size:13px; }
+  .modal-close { position:fixed; top:16px; right:20px; color:#fff; font-size:30px; cursor:pointer; line-height:1; padding:6px; z-index:101; }
+  .modal-nav { position:fixed; top:50%; transform:translateY(-50%); background:rgba(255,255,255,.14); color:#fff; width:46px; height:68px; font-size:30px; border-radius:10px; cursor:pointer; z-index:101; padding:0; display:flex; align-items:center; justify-content:center; }
+  .modal-nav:hover { background:rgba(255,255,255,.3); }
+  .modal-nav.prev { left:10px; }
+  .modal-nav.next { right:10px; }
+  .modal-nav:disabled { opacity:.25; cursor:default; background:rgba(255,255,255,.08); }
+  .modal-counter { color:#b9bddc; font-size:13px; text-align:center; margin-top:10px; }
+</style>
+</head>
+<body>
+<header><h1>📁 手机文件管理器</h1><span id="status" style="font-size:13px;opacity:.85"></span></header>
+<div class="container">
+  <div class="pathbar" id="pathbar"></div>
+  <div class="toolbar">
+    <button class="ghost" onclick="goUp()">⬆ 上级</button>
+    <button onclick="document.getElementById('fileInput').click()">⬆ 上传文件</button>
+    <button class="ghost" onclick="newFolder()">📁 新建文件夹</button>
+    <button class="ghost" onclick="load()">🔄 刷新</button>
+    <input id="fileInput" type="file" multiple class="hidden" onchange="onFiles(this)">
+  </div>
+  <div id="progress"></div>
+  <div class="card">
+    <table>
+      <thead><tr><th>名称</th><th class="col-size">大小</th><th class="col-mod">修改时间</th><th class="col-act"></th></tr></thead>
+      <tbody id="list"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 预览弹窗 -->
+<div id="previewModal" class="modal hidden">
+  <span class="modal-close" onclick="closePreview()">✕</span>
+  <button class="modal-nav prev" id="prevBtn" onclick="showPrev()">‹</button>
+  <div style="display:flex;flex-direction:column;align-items:center;max-width:96vw;">
+    <div class="modal-title" id="previewTitle"></div>
+    <div class="modal-body" id="previewBody"></div>
+    <div class="modal-footer" id="previewFooter"></div>
+    <div class="modal-counter" id="previewCounter"></div>
+  </div>
+  <button class="modal-nav next" id="nextBtn" onclick="showNext()">›</button>
+</div>
+<script>
+let currentPath = '/';
+let previewList = [];   // 当前目录中可预览文件 [{enc,name,size}]
+let previewIndex = -1;
+const $ = id => document.getElementById(id);
+
+const IMG_EXT = ['jpg','jpeg','png','gif','webp','bmp','svg'];
+const VID_EXT = ['mp4','webm','mov','m4v'];
+const AUD_EXT = ['mp3','wav','ogg','m4a','aac','flac'];
+const TXT_EXT = ['txt','log','md','markdown','json','xml','yml','yaml','csv','ini','conf','properties','sql','sh','bat','py','java','c','cpp','h','ts','js','css','html','htm'];
+function extOf(name){ const i=name.lastIndexOf('.'); return i<0?'':name.substring(i+1).toLowerCase(); }
+function previewable(name){ const e=extOf(name); return IMG_EXT.includes(e)||VID_EXT.includes(e)||AUD_EXT.includes(e)||TXT_EXT.includes(e); }
+
+function fmtSize(n){ if(n===null||n===undefined) return ''; const u=['B','KB','MB','GB','TB']; let i=0,v=n; while(v>=1024&&i<u.length-1){v/=1024;i++;} return (i===0?v:v.toFixed(1))+' '+u[i]; }
+function fmtDate(ms){ if(!ms) return ''; const d=new Date(ms); const p=x=>(''+x).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+function join(p,name){ return p.endsWith('/')? p+name : p+'/'+name; }
+function parentOf(p){ if(p==='/') return '/'; const t=p.replace(/\/$/,''); const i=t.lastIndexOf('/'); return i<=0? '/':t.substring(0,i); }
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeAttr(s){ return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+
+async function load(){
+  const res = await fetch('/api/list?path='+encodeURIComponent(currentPath));
+  const data = await res.json();
+  currentPath = data.path || currentPath;
+  render(data);
+}
+function render(data){
+  $('pathbar').innerHTML = '当前路径：<b>'+escapeHtml(currentPath)+'</b>';
+  const items = (data.items||[]).slice();
+  items.sort((a,b)=> (a.type===b.type)? a.name.localeCompare(b.name,'zh') : (a.type==='dir'?-1:1));
+  // 收集可预览文件，供上一个/下一个导航
+  previewList = items.filter(it => it.type!=='dir' && previewable(it.name))
+                     .map(it => ({enc: encodeURIComponent(join(currentPath,it.name)), name: it.name, size: it.size}));
+  $('status').textContent = items.length + ' 项';
+  const tb = $('list');
+  if(items.length===0){ tb.innerHTML='<tr><td colspan="4" class="empty">空文件夹</td></tr>'; return; }
+  // 分页渲染：避免上千条目一次性生成 DOM 导致卡顿
+  pageItems = items; pageIndex = 0;
+  tb.innerHTML = '';
+  appendPage();
+}
+
+const PAGE_SIZE = 300;
+let pageItems = [], pageIndex = 0;
+function appendPage(){
+  const more = $('moreRow'); if (more) more.remove();
+  const tb = $('list');
+  const slice = pageItems.slice(pageIndex, pageIndex+PAGE_SIZE);
+  tb.insertAdjacentHTML('beforeend', slice.map(rowHtml).join(''));
+  pageIndex += slice.length;
+  if (pageIndex < pageItems.length) {
+    tb.insertAdjacentHTML('beforeend', '<tr id="moreRow"><td colspan="4" style="text-align:center;padding:14px">'
+      + '<button class="ghost" onclick="appendPage()">↓ 加载更多（剩余 '+(pageItems.length-pageIndex)+' 项）</button></td></tr>');
+  }
+}
+
+function rowHtml(it){
+    const isDir = it.type==='dir';
+    const enc = encodeURIComponent(join(currentPath,it.name));
+    const icon = isDir? '📁':'📄';
+    const nameCell = isDir
+      ? '<span class="dir" title="'+escapeHtml(it.name)+'" onclick="navigate(\''+enc+'\')">'+escapeHtml(it.name)+'</span>'
+      : (previewable(it.name)
+          ? '<span class="dir" title="'+escapeHtml(it.name)+'" onclick="preview(\''+enc+'\',\''+escapeAttr(it.name)+'\')">'+escapeHtml(it.name)+'</span>'
+          : '<span title="'+escapeHtml(it.name)+'">'+escapeHtml(it.name)+'</span>');
+    const e = extOf(it.name);
+    const isTxt = TXT_EXT.includes(e);
+    const vi = IMG_EXT.includes(e)?'🖼':(VID_EXT.includes(e)?'▶️':(isTxt?'📝':'🎵'));
+    const vt = (IMG_EXT.includes(e)||isTxt)?'预览':'播放';
+    const dl = isDir? '' : '<a class="dl" href="/api/download?path='+enc+'" download><span class="t">下载</span><span class="i">⬇️</span></a>';
+    const viewBtn = (!isDir && previewable(it.name)) ? '<button class="small" onclick="preview(\''+enc+'\',\''+escapeAttr(it.name)+'\')"><span class="t">'+vt+'</span><span class="i">'+vi+'</span></button>' : '';
+    const renameBtn = '<button class="small ghost" onclick="renameItem(\''+enc+'\',\''+escapeAttr(it.name)+'\')"><span class="t">重命名</span><span class="i">✏️</span></button>';
+    return '<tr>'
+      + '<td class="col-name"><div class="name"><span class="ic">'+icon+'</span>'+nameCell+'</div></td>'
+      + '<td class="size col-size">'+fmtSize(it.size)+'</td>'
+      + '<td class="mod col-mod">'+fmtDate(it.modified)+'</td>'
+      + '<td class="col-act"><div class="actions">'+viewBtn+dl+renameBtn
+      + '<button class="small danger" onclick="doDelete(\''+enc+'\',\''+escapeAttr(it.name)+'\')"><span class="t">删除</span><span class="i">🗑️</span></button>'
+      + '</div></td></tr>';
+}
+function navigate(enc){ currentPath = decodeURIComponent(enc); load(); }
+function goUp(){ currentPath = parentOf(currentPath); load(); }
+
+async function onFiles(input){
+  const files = input.files;
+  if(!files||!files.length) return;
+  let i=0;
+  for(const f of files){
+    $('progress').textContent = '上传中 ('+(i+1)+'/'+files.length+'): '+f.name;
+    try{
+      const r = await fetch('/api/upload?path='+encodeURIComponent(currentPath)+'&name='+encodeURIComponent(f.name), {method:'POST', body:f});
+      if(!r.ok) throw new Error('fail');
+    }catch(e){ alert('上传失败: '+f.name); }
+    i++;
+  }
+  $('progress').textContent='';
+  input.value='';
+  load();
+}
+async function newFolder(){
+  const name = prompt('请输入新文件夹名称'); if(!name) return;
+  await fetch('/api/mkdir?path='+encodeURIComponent(currentPath)+'&name='+encodeURIComponent(name), {method:'POST'});
+  load();
+}
+async function doDelete(enc,name){
+  if(!confirm('确定删除「'+name+'」吗？此操作不可恢复。')) return;
+  await fetch('/api/delete?path='+enc, {method:'POST'});
+  load();
+}
+async function renameItem(enc,name){
+  const nn = prompt('重命名为', name); if(!nn) return;
+  await fetch('/api/rename?path='+enc+'&name='+encodeURIComponent(nn), {method:'POST'});
+  load();
+}
+
+function preview(enc,name){
+  const idx = previewList.findIndex(it => it.enc===enc);
+  if (idx >= 0) { previewIndex = idx; }
+  else { previewList = [{enc, name}]; previewIndex = 0; }
+  showPreview();
+}
+let previewSeq = 0;   // 防止快速切换时旧请求覆盖新内容
+/**
+ * 字节→文本的编码推断：
+ * 1) 有 BOM 直接按对应编码（UTF-8/UTF-16LE/BE）
+ * 2) 无 BOM 先用严格 UTF-8 解码；因 Range 截断可能在末尾拆坏一个多字节字符，
+ *    故允许“去掉末尾3字节”后再试一次，仍成功则计为 UTF-8
+ * 3) 都不行→非 UTF-8，回退 GB18030（兼容 GBK/GB2312，中文Windows文本常见）
+ */
+function decodeText(buf){
+  const u8 = new Uint8Array(buf);
+  if (u8.length>=3 && u8[0]===0xEF && u8[1]===0xBB && u8[2]===0xBF)
+    return new TextDecoder('utf-8').decode(u8.subarray(3));
+  if (u8.length>=2 && u8[0]===0xFF && u8[1]===0xFE)
+    return new TextDecoder('utf-16le').decode(u8);
+  if (u8.length>=2 && u8[0]===0xFE && u8[1]===0xFF)
+    return new TextDecoder('utf-16be').decode(u8);
+  try { return new TextDecoder('utf-8',{fatal:true}).decode(u8); } catch(e){}
+  if (u8.length>3) { try { return new TextDecoder('utf-8',{fatal:true}).decode(u8.subarray(0,u8.length-3)); } catch(e){} }
+  try { return new TextDecoder('gb18030').decode(u8); } catch(e){ return new TextDecoder('utf-8').decode(u8); }
+}
+
+/* ===================== 零依赖的语法高亮 / Markdown 渲染 ===================== */
+const MD_EXT = ['md','markdown'];
+// 扩展名 → 高亮 profile 名（markup 走专门的标签高亮）
+const CODE_PROFILE = {
+  js:'clike',jsx:'clike',ts:'clike',tsx:'clike',java:'clike',c:'clike',h:'clike',cpp:'clike',cc:'clike',hpp:'clike',cs:'clike',go:'clike',rs:'clike',php:'clike',kt:'clike',swift:'clike',scala:'clike',groovy:'clike',
+  py:'py',sh:'py',bash:'py',yml:'py',yaml:'py',ini:'py',conf:'py',properties:'py',toml:'py',dockerfile:'py',
+  sql:'sql', json:'json', css:'css',
+  html:'markup',htm:'markup',xml:'markup',svg:'markup',
+  bat:'bat'
+};
+function kindOf(e){ if(MD_EXT.includes(e)) return 'md'; if(CODE_PROFILE[e]) return 'code'; return 'plain'; }
+
+const PROFILES = {
+  clike:{line:['//'],block:[['/*','*/']],str:['"',"'",'`'],kw:'abstract as assert boolean break byte case catch char class const continue crate default do double else enum extends extern final finally float fn for func goto if implements import in instanceof interface long namespace native new operator of out package private protected public readonly record return sealed short static string struct super switch synchronized template this throw throws transient try typedef typeid typeof union unsigned using var virtual void volatile while yield bool true false null nullptr NULL undefined arguments'},
+  py:{line:['#'],block:[],str:['"',"'"],kw:'def class return if elif else for while import from as pass break continue lambda try except finally raise with yield global nonlocal del assert in is not and or None True False self async await print len range'},
+  sql:{line:['--'],block:[['/*','*/']],str:["'"],i:true,kw:'select from where insert into values update delete set create table drop alter index add column primary key foreign references join inner left right full outer cross on group by having order asc desc limit offset distinct count sum avg min max as and or not null like ilike in between exists union all case when then else end begin commit rollback grant revoke'},
+  json:{line:[],block:[],str:['"'],kw:'true false null'},
+  css:{line:[],block:[['/*','*/']],str:['"',"'"]},
+  bat:{line:['::','rem'],block:[],str:['"'],i:true,kw:'echo set if then else goto call exit for in do pushd popd cd del copy move mkdir rmdir cls pause'}
+};
+function esc(t){ return escapeHtml(t); }
+function isIdent(ch){ return ch && /[\w$]/.test(ch); }
+
+/** 通用字符扫描式高亮（注释/字符串/数字/关键字），返回安全 HTML */
+function highlightCode(code, profile){
+  const prof = PROFILES[profile];
+  if(!prof) return esc(code);
+  const kw = prof.kw ? new Set(prof.kw.split(' ')) : null;
+  const line = prof.line||[], block = prof.block||[], str = prof.str||[];
+  const n = code.length; let out='', i=0;
+  const wrap=(cls,txt)=>{ out += '<span class="'+cls+'">'+esc(txt)+'</span>'; };
+  while(i<n){
+    const c = code[i]; let done=false;
+    for(const bc of block){ if(code.startsWith(bc[0],i)){ let e=code.indexOf(bc[1],i+bc[0].length); e=e<0?n:e+bc[1].length; wrap('tk-c',code.slice(i,e)); i=e; done=true; break; } } if(done) continue;
+    for(const l of line){ if(code.startsWith(l,i)){ let e=code.indexOf('\n',i); e=e<0?n:e; wrap('tk-c',code.slice(i,e)); i=e; done=true; break; } } if(done) continue;
+    for(const q of str){ if(c===q){ let j=i+1; while(j<n){ if(code[j]==='\\'){ j+=2; continue; } if(code[j]===q){ j++; break; } if(code[j]==='\n' && q!=='`') break; j++; } wrap('tk-s',code.slice(i,j)); i=j; done=true; break; } } if(done) continue;
+    if(c>='0'&&c<='9'){ let j=i+1; while(j<n && /[\d.]/.test(code[j])) j++; wrap('tk-n',code.slice(i,j)); i=j; continue; }
+    if(/[A-Za-z_$]/.test(c)){ let j=i+1; while(j<n && isIdent(code[j])) j++; const w=code.slice(i,j); if(kw && kw.has(prof.i?w.toLowerCase():w)) wrap('tk-k',w); else out+=esc(w); i=j; continue; }
+    out+=esc(c); i++;
+  }
+  return out;
+}
+/** HTML/XML 标签高亮 */
+function highlightMarkup(code){
+  const re = /(<!--[\s\S]*?-->)|(<\?[\s\S]*?\?>)|(<\/?[A-Za-z][\w:.-]*)|(\b[\w:.-]+(?==))|(="[^"]*"|='[^']*')|(>)/g;
+  let out='', last=0, m;
+  while((m=re.exec(code))){
+    out += esc(code.slice(last,m.index));
+    if(m[1]||m[2]) out+='<span class="tk-c">'+esc(m[1]||m[2])+'</span>';
+    else if(m[3]||m[6]) out+='<span class="tk-t">'+esc(m[3]||m[6])+'</span>';
+    else if(m[4]) out+='<span class="tk-a">'+esc(m[4])+'</span>';
+    else if(m[5]) out+='<span class="tk-s">'+esc(m[5])+'</span>';
+    last = re.lastIndex;
+  }
+  out += esc(code.slice(last));
+  return out;
+}
+function safeUrl(u){ return /^\s*(javascript|vbscript|data):/i.test(u) ? '#' : u; }
+/** Markdown 行内语法（先转义再用占位符保护行内代码） */
+function mdInline(s){
+  s = esc(s);
+  const codes=[];
+  s = s.replace(/`([^`]+)`/g,(m,c)=>{ codes.push(c); return '\u0000'+(codes.length-1)+'\u0000'; });
+  s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,(m,alt,src)=>'<img alt="'+alt+'" src="'+safeUrl(src)+'">');
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,(m,t,href)=>'<a href="'+safeUrl(href)+'" target="_blank" rel="noopener">'+t+'</a>');
+  s = s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/__([^_]+)__/g,'<strong>$1</strong>');
+  s = s.replace(/(^|[^*\w])\*([^*\n]+)\*/g,'$1<em>$2</em>');
+  s = s.replace(/(^|[^_\w])_([^_\n]+)_/g,'$1<em>$2</em>');
+  s = s.replace(/~~([^~]+)~~/g,'<del>$1</del>');
+  // 段内每个换行都当作硬换行渲染（贴合笔记/日志类 md 的直觉）；先处理换行再还原行内代码，避免代码内换行被误转
+  s = s.replace(/(?: {2,})?\n/g,'<br>');
+  s = s.replace(/\u0000(\d+)\u0000/g,(m,idx)=>'<code>'+codes[idx]+'</code>');
+  return s;
+}
+function splitRow(r){ return r.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(c=>c.trim()); }
+function mdTable(rows){
+  const head=splitRow(rows[0]);
+  const al=splitRow(rows[1]).map(a=>{const l=a.charAt(0)===':',r2=a.charAt(a.length-1)===':';return l&&r2?'center':r2?'right':l?'left':'';});
+  let h='<table><thead><tr>';
+  head.forEach((c,x)=>h+='<th'+(al[x]?' style="text-align:'+al[x]+'"':'')+'>'+mdInline(c)+'</th>');
+  h+='</tr></thead><tbody>';
+  for(let i=2;i<rows.length;i++){ const cs=splitRow(rows[i]); h+='<tr>'; cs.forEach((c,x)=>h+='<td'+(al[x]?' style="text-align:'+al[x]+'"':'')+'>'+mdInline(c)+'</td>'); h+='</tr>'; }
+  return h+'</tbody></table>';
+}
+/** 轻量 Markdown → HTML（支持标题/列表/引用/围栏代码/表格/链接/图片/粗斜体/行内代码/分割线） */
+function renderMarkdown(src){
+  const lines = src.replace(/\r\n?/g,'\n').split('\n');
+  let html='', i=0, para=[];
+  const flush=()=>{ if(para.length){ html+='<p>'+mdInline(para.join('\n'))+'</p>'; para=[]; } };
+  while(i<lines.length){
+    const line=lines[i];
+    const fm=/^```(\w*)\s*$/.exec(line);
+    if(fm){ let lang=fm[1], buf=[]; i++; while(i<lines.length && !/^```\s*$/.test(lines[i])){ buf.push(lines[i]); i++; } i++; flush(); const code=buf.join('\n'); let inner; if(CODE_PROFILE[lang]==='markup') inner=highlightMarkup(code); else if(PROFILES[lang]) inner=highlightCode(code,lang); else inner=esc(code); html+='<pre class="code">'+inner+'</pre>'; continue; }
+    const hm=/^(#{1,6})\s+(.*)$/.exec(line);
+    if(hm){ flush(); const l=hm[1].length; html+='<h'+l+'>'+mdInline(hm[2])+'</h'+l+'>'; i++; continue; }
+    if(/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)){ flush(); html+='<hr>'; i++; continue; }
+    if(/^>\s?/.test(line)){ flush(); let buf=[]; while(i<lines.length && /^>\s?/.test(lines[i])){ buf.push(lines[i].replace(/^>\s?/,'')); i++; } html+='<blockquote>'+renderMarkdown(buf.join('\n'))+'</blockquote>'; continue; }
+    if(/^\s*[-*+]\s+/.test(line)){ flush(); let buf=[]; while(i<lines.length && /^\s*[-*+]\s+/.test(lines[i])){ buf.push(lines[i].replace(/^\s*[-*+]\s+/,'')); i++; } html+='<ul>'+buf.map(x=>'<li>'+mdInline(x)+'</li>').join('')+'</ul>'; continue; }
+    if(/^\s*\d+\.\s+/.test(line)){ flush(); let buf=[]; while(i<lines.length && /^\s*\d+\.\s+/.test(lines[i])){ buf.push(lines[i].replace(/^\s*\d+\.\s+/,'')); i++; } html+='<ol>'+buf.map(x=>'<li>'+mdInline(x)+'</li>').join('')+'</ol>'; continue; }
+    if(line.includes('|') && i+1<lines.length && lines[i+1].includes('-') && /^\s*\|?[\s:|-]+\|\s*$/.test(lines[i+1])){ flush(); const rows=[lines[i],lines[i+1]]; i+=2; while(i<lines.length && lines[i].includes('|') && lines[i].trim()!==''){ rows.push(lines[i]); i++; } html+=mdTable(rows); continue; }
+    if(/^\s*$/.test(line)){ flush(); i++; continue; }
+    para.push(line); i++;
+  }
+  flush();
+  return html;
+}
+
+/* ---------- 文本预览渲染状态与控制 ---------- */
+let cur = null;               // {it, text, truncated, mdSource}
+const HL_MAX = 300000;        // 超过此字符数不做高亮/渲染，降级为纯文本
+function makeGutter(n){ let s=''; for(let i=1;i<=n;i++) s+=i+'\n'; return '<pre class="lnum">'+s+'</pre>'; }
+function renderTextBody(){
+  if(!cur) return;
+  const it=cur.it, e=extOf(it.name), kind=kindOf(e), body=$('previewBody');
+  if(kind==='md' && !cur.mdSource && cur.text.length<=HL_MAX){ body.innerHTML='<div class="md">'+renderMarkdown(cur.text)+'</div>'; }
+  else if(kind==='code' && cur.text.length<=HL_MAX){ const inner=(CODE_PROFILE[e]==='markup'?highlightMarkup(cur.text):highlightCode(cur.text,CODE_PROFILE[e])); body.innerHTML='<div class="codewrap">'+makeGutter(cur.text.split('\n').length)+'<pre class="code">'+inner+'</pre></div>'; }
+  else { body.innerHTML='<pre class="txt">'+esc(cur.text)+'</pre>'; }
+  let f='';
+  if(kind==='md') f+='<button class="small ghost" onclick="mdToggle()">'+(cur.mdSource?'渲染预览':'查看源码')+'</button>';
+  if(cur.truncated){ const sz=it.size? ' · '+fmtSize(it.size):''; f+='<button class="small" onclick="loadFullText()">⬇ 加载全文'+sz+'</button>'; }
+  $('previewFooter').innerHTML=f;
+}
+function mdToggle(){ cur.mdSource=!cur.mdSource; renderTextBody(); }
+async function loadFullText(){
+  const it=cur.it, seq=++previewSeq;
+  if(it.size && it.size>20*1024*1024 && !confirm('文件较大（'+fmtSize(it.size)+'），加载全文可能导致卡顿，是否继续？')) return;
+  $('previewFooter').innerHTML='<span class="muted">正在加载全文…</span>';
+  try{
+    const r=await fetch('/api/view?path='+it.enc);
+    const buf=await r.arrayBuffer();
+    if(seq!==previewSeq) return;
+    cur.text=decodeText(buf); cur.truncated=false; renderTextBody();
+  }catch(err){ $('previewFooter').innerHTML='<span class="muted">全文加载失败：'+esc(err&&err.message?err.message:err)+'</span>'; }
+}
+
+async function showPreview(){
+  const it = previewList[previewIndex];
+  if (!it) return;
+  const e = extOf(it.name);
+  const url = '/api/view?path='+it.enc;
+  const seq = ++previewSeq;
+  const paint = () => {
+    $('previewTitle').textContent = it.name;
+    $('previewCounter').textContent = (previewIndex+1)+' / '+previewList.length;
+    $('prevBtn').disabled = previewIndex <= 0;
+    $('nextBtn').disabled = previewIndex >= previewList.length-1;
+    $('previewFooter').innerHTML = '';
+    $('previewModal').classList.remove('hidden');
+  };
+  if (IMG_EXT.includes(e))      { $('previewBody').innerHTML = '<img src="'+url+'" alt="'+escapeAttr(it.name)+'">'; paint(); }
+  else if (VID_EXT.includes(e)) { $('previewBody').innerHTML = '<video src="'+url+'" controls autoplay playsinline></video>'; paint(); }
+  else if (AUD_EXT.includes(e)) { $('previewBody').innerHTML = '<audio src="'+url+'" controls autoplay></audio>'; paint(); }
+  else if (TXT_EXT.includes(e)) {
+    $('previewBody').innerHTML = '<pre class="txt">加载中…</pre>';
+    paint();
+    try {
+      const MAX = 1024*1024; // 默认只预览前 1MB，避免超大文件卡死；可手动“加载全文”
+      const r = await fetch(url, { headers: { 'Range': 'bytes=0-'+(MAX-1) } });
+      const buf = await r.arrayBuffer();
+      if (seq !== previewSeq) return;            // 已切换到其它文件，丢弃
+      // 是否截断：看 Content-Range 的总大小 vs 本次返回字节数（小文件即使 206 也已返回全部内容）
+      let truncated = false;
+      const cr = r.headers.get('Content-Range');
+      if (cr) { const total = parseInt((cr.split('/')[1]||'').trim(), 10); if (total) truncated = buf.byteLength < total; }
+      else truncated = (r.status === 206 && buf.byteLength >= MAX);
+      cur = { it: it, text: decodeText(buf), truncated: truncated, mdSource: false };
+      renderTextBody();                          // 按 md/代码/纯文本 分别渲染
+    } catch(err) {
+      if (seq !== previewSeq) return;
+      const pre = $('previewBody').querySelector('pre.txt');
+      if (pre) pre.textContent = '加载失败：' + (err && err.message ? err.message : err);
+    }
+  }
+  else { alert('该格式不支持在线预览，请下载后打开'); }
+}
+function showPrev(){ if(previewIndex>0){ previewIndex--; showPreview(); } }
+function showNext(){ if(previewIndex<previewList.length-1){ previewIndex++; showPreview(); } }
+function closePreview(){
+  $('previewBody').innerHTML = '';   // 清空即停止播放
+  $('previewModal').classList.add('hidden');
+}
+// 点击背景关闭（点击媒体本身不关闭）
+$('previewModal').addEventListener('click', function(ev){ if(ev.target===this) closePreview(); });
+// 键盘：ESC 关闭，← → 切换
+document.addEventListener('keydown', function(ev){
+  if ($('previewModal').classList.contains('hidden')) {
+    if (ev.key==='Escape') closePreview();
+    return;
+  }
+  if (ev.key==='Escape') closePreview();
+  else if (ev.key==='ArrowLeft') showPrev();
+  else if (ev.key==='ArrowRight') showNext();
+});
+
+load();
+</script>
+</body>
+</html>

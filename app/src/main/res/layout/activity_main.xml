@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#f5f6fa">
+
+    <LinearLayout
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:text="@string/app_name"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="#21005D"
+            android:layout_marginBottom="16dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            android:id="@+id/statusText"
+            android:textSize="15sp"
+            android:textColor="#1f2330"
+            android:lineSpacingExtra="4dp"
+            android:layout_marginBottom="20dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <!-- 端口输入行 -->
+        <LinearLayout
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="#ffffff"
+            android:padding="12dp"
+            android:layout_marginBottom="16dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <TextView
+                android:text="端口"
+                android:textSize="15sp"
+                android:textColor="#1f2330"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <EditText
+                android:id="@+id/portInput"
+                android:inputType="number"
+                android:maxLength="5"
+                android:text="8080"
+                android:textSize="15sp"
+                android:gravity="center"
+                android:padding="6dp"
+                android:layout_marginStart="12dp"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:text="（1024–65535，服务运行时不可修改）"
+                android:textSize="12sp"
+                android:textColor="#8a8f9c"
+                android:layout_marginStart="10dp"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/toggleBtn"
+            android:text="启动服务器"
+            android:textAllCaps="false"
+            android:backgroundTint="#6750A4"
+            android:textColor="#ffffff"
+            android:padding="12dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            android:text="使用说明：\n1. 点击启动并授予「所有文件访问」权限。\n2. 确保手机与访问设备在同一 Wi-Fi。\n3. 在浏览器打开上方显示的地址即可管理文件。"
+            android:textSize="13sp"
+            android:textColor="#8a8f9c"
+            android:layout_marginTop="20dp"
+            android:lineSpacingExtra="4dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+</ScrollView>

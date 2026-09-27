@@ -86,8 +86,5 @@ gradlew.bat
 /gradle/
 
 
-build.bat
-buildapk.bat
-clean.bat
-install.bat
-*.local.bat
+*.bat
+

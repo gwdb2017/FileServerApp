@@ -25,6 +25,10 @@
   tr:last-child td { border-bottom:none; }
   tr:hover td { background:#faf9ff; }
   .col-size { width:110px; } .col-mod { width:170px; } .col-act { width:300px; }
+  /* 可排序表头 */
+  th.sortable { cursor:pointer; user-select:none; -webkit-user-select:none; white-space:nowrap; }
+  th.sortable:hover { color:var(--primary); }
+  th.sortable .si { display:inline-block; width:1em; color:var(--muted); }
   .name { display:flex; align-items:center; gap:8px; min-width:0; }
   .name > :last-child { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .ic { width:22px; min-width:22px; text-align:center; }
@@ -117,7 +121,7 @@
   <div id="progress"></div>
   <div class="card">
     <table>
-      <thead><tr><th>名称</th><th class="col-size">大小</th><th class="col-mod">修改时间</th><th class="col-act"></th></tr></thead>
+      <thead><tr><th class="sortable" onclick="setSort('name')">名称<span class="si" id="si-name"></span></th><th class="sortable col-size" onclick="setSort('size')">大小<span class="si" id="si-size"></span></th><th class="sortable col-mod" onclick="setSort('modified')">修改时间<span class="si" id="si-modified"></span></th><th class="col-act"></th></tr></thead>
       <tbody id="list"></tbody>
     </table>
   </div>
@@ -161,10 +165,36 @@ async function load(){
   currentPath = data.path || currentPath;
   render(data);
 }
+let sortKey = 'name';   // 排序字段：name/size/modified
+let sortAsc = true;     // 升序/降序
+function setSort(key){
+  if (sortKey === key) sortAsc = !sortAsc;
+  else { sortKey = key; sortAsc = true; }
+  if (lastListData) render(lastListData);   // 用缓存数据重新排序渲染，无需重新请求
+}
+function sortItems(items){
+  const dir = sortAsc ? 1 : -1;
+  return items.slice().sort((a,b)=>{
+    // 文件夹始终置顶，组内按所选字段排序
+    if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+    if (sortKey === 'size') return ((a.size||0) - (b.size||0)) * dir;
+    if (sortKey === 'modified') return ((a.modified||0) - (b.modified||0)) * dir;
+    return a.name.localeCompare(b.name,'zh') * dir;
+  });
+}
+function updateSortIndicators(){
+  ['name','size','modified'].forEach(k=>{
+    const el = $('si-'+k); if(!el) return;
+    el.textContent = k === sortKey ? (sortAsc ? '↑' : '↓') : '';
+  });
+}
+
+let lastListData = null;   // 缓存最近一次列表数据，切换排序时免请求
 function render(data){
+  lastListData = data;
   $('pathbar').innerHTML = '当前路径：<b>'+escapeHtml(currentPath)+'</b>';
-  const items = (data.items||[]).slice();
-  items.sort((a,b)=> (a.type===b.type)? a.name.localeCompare(b.name,'zh') : (a.type==='dir'?-1:1));
+  const items = sortItems(data.items||[]);
+  updateSortIndicators();
   // 收集可预览文件，供上一个/下一个导航
   previewList = items.filter(it => it.type!=='dir' && previewable(it.name))
                      .map(it => ({enc: encodeURIComponent(join(currentPath,it.name)), name: it.name, size: it.size}));
